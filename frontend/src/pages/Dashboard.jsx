@@ -163,12 +163,20 @@ const Dashboard = () => {
           <div className="lg:col-span-3 card">
             <h2 className="text-xl font-bold text-white mb-6">Market Overview</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {(overview.assets || overview.trending || []).slice(0, 4).map((asset) => (
-                <div key={asset.symbol} className="bg-slate-800/50 p-4 rounded-lg">
-                  <p className="text-gray-400 text-sm font-medium mb-2">{asset.symbol}</p>
-                  <p className="text-white font-bold text-lg">${asset.price?.toFixed(2)}</p>
-                  <p className={`text-sm ${asset.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {asset.change >= 0 ? '+' : ''}{asset.change?.toFixed(2)}%
+              {(overview.assets || []).slice(0, 4).map((asset) => (
+                <div key={asset.symbol || asset.id} className="bg-slate-800/50 p-4 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    {asset.image && (
+                      <img src={asset.image} alt={asset.name} className="w-5 h-5 rounded-full" />
+                    )}
+                    <p className="text-gray-400 text-sm font-medium">{asset.symbol}</p>
+                  </div>
+                  <p className="text-white font-bold text-lg">
+                    ${asset.current_price?.toFixed(2)}
+                  </p>
+                  <p className={`text-sm ${(asset.price_change_percentage_24h || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {(asset.price_change_percentage_24h || 0) >= 0 ? '+' : ''}
+                    {asset.price_change_percentage_24h?.toFixed(2)}%
                   </p>
                 </div>
               ))}

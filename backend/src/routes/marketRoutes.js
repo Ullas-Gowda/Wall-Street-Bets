@@ -6,11 +6,15 @@ import {
   searchMarketAssets,
   getTrendingMarketAssets,
   getMarketOverview,
+  getMarkets,
+  getCoinPricesEndpoint,
 } from "../controllers/marketController.js";
 
 const router = express.Router();
 
 // Market routes (public, no authentication required)
+router.get("/markets", getMarkets); // New: Get all markets with pagination
+router.get("/coin-prices", getCoinPricesEndpoint); // New: Get specific coin prices in multiple currencies
 router.get("/price/:symbol", getMarketPrice);
 router.get("/prices", getMarketPrices);
 router.get("/history/:symbol", getPriceHistory);

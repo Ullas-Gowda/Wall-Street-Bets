@@ -14,7 +14,7 @@ export const AuthProvider = ({ children }) => {
     if (token) {
       authAPI.getCurrentUser()
         .then(res => {
-          setUser(res.data);
+          setUser(res.data.user);
           setLoading(false);
         })
         .catch(err => {
@@ -57,8 +57,12 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const updateUser = (userData) => {
+    setUser(userData);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, error, signup, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, error, signup, login, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

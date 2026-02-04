@@ -1,6 +1,54 @@
-import { getPrice, getPrices, getPriceHistory as getPriceHistoryData, getTrendingAssets, searchAssets } from "../services/marketService.js";
+import {
+  getPrice,
+  getPrices,
+  getPriceHistory as getPriceHistoryData,
+  getTrendingAssets,
+  searchAssets,
+  getAllMarkets,
+  getCoinPrices
+} from "../services/marketService.js";
 
-// GET SINGLE PRICE
+// GET ALL MARKETS (with pagination and currency support)
+export const getMarkets = async (req, res) => {
+  try {
+    const { vs_currency = "usd", per_page = 50, page = 1, asset_type = "all" } = req.query;
+    const markets = await getAllMarkets(vs_currency, parseInt(per_page), parseInt(page), asset_type);
+
+    res.json({
+      total: markets.length,
+      markets,
+      currency: vs_currency,
+      page: parseInt(page),
+      per_page: parseInt(per_page),
+    });
+  } catch (error) {
+    console.error("Get markets error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// GET COIN PRICES (multi-currency support)
+export const getCoinPricesEndpoint = async (req, res) => {
+  try {
+    const { ids, vs_currencies = "usd,inr" } = req.query;
+
+    if (!ids) {
+      return res.status(400).json({ message: "Coin IDs required (ids parameter)" });
+    }
+
+    const coinIds = typeof ids === "string" ? ids.split(",") : ids;
+    const currencies = typeof vs_currencies === "string" ? vs_currencies.split(",") : vs_currencies;
+
+    const prices = await getCoinPrices(coinIds, currencies);
+
+    res.json(prices);
+  } catch (error) {
+    console.error("Get coin prices error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// GET SINGLE PRICE (by symbol)
 export const getMarketPrice = async (req, res) => {
   try {
     const { symbol } = req.params;
@@ -17,7 +65,7 @@ export const getMarketPrice = async (req, res) => {
   }
 };
 
-// GET MULTIPLE PRICES
+// GET MULTIPLE PRICES (by symbols)
 export const getMarketPrices = async (req, res) => {
   try {
     const { symbols } = req.query;
@@ -26,7 +74,7 @@ export const getMarketPrices = async (req, res) => {
       return res.status(400).json({ message: "Symbols query parameter required" });
     }
 
-    const symbolArray = typeof symbols === "string" ? [symbols] : symbols;
+    const symbolArray = typeof symbols === "string" ? symbols.split(",") : symbols;
     const prices = await getPrices(symbolArray);
 
     res.json({ prices });
@@ -85,21 +133,16 @@ export const getTrendingMarketAssets = async (req, res) => {
   }
 };
 
-// GET MARKET OVERVIEW (ALL ASSETS)
+// GET MARKET OVERVIEW
 export const getMarketOverview = async (req, res) => {
   try {
-    const { type } = req.query; // "stock" or "crypto"
-
-    const trending = await getTrendingAssets();
-    let assets = trending;
-
-    if (type) {
-      assets = assets.filter((a) => a.type === type.toLowerCase());
-    }
+    const { vs_currency = "usd" } = req.query;
+    const markets = await getAllMarkets(vs_currency, 10, 1);
 
     res.json({
-      total: assets.length,
-      assets,
+      total: markets.length,
+      assets: markets,
+      currency: vs_currency,
     });
   } catch (error) {
     console.error("Get overview error:", error);

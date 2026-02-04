@@ -37,12 +37,21 @@ export const tradingAPI = {
 
 // Market API
 export const marketAPI = {
+  // New: Get all markets with pagination and currency support
+  getMarkets: (vsCurrency = 'usd', perPage = 50, page = 1) =>
+    api.get('/market/markets', { params: { vs_currency: vsCurrency, per_page: perPage, page } }),
+
+  // New: Get specific coin prices in multiple currencies
+  getCoinPrices: (coinIds, vsCurrencies = 'usd,inr') =>
+    api.get('/market/coin-prices', { params: { ids: coinIds.join(','), vs_currencies: vsCurrencies } }),
+
+  // Existing endpoints
   getPrice: (symbol) => api.get(`/market/price/${symbol}`),
-  getPrices: (symbols) => api.get('/market/prices', { params: { symbols } }),
+  getPrices: (symbols) => api.get('/market/prices', { params: { symbols: symbols.join(',') } }),
   getPriceHistory: (symbol) => api.get(`/market/history/${symbol}`),
   searchAssets: (q) => api.get('/market/search', { params: { q } }),
   getTrending: () => api.get('/market/trending'),
-  getOverview: (type) => api.get('/market/overview', { params: { type } }),
+  getOverview: (vsCurrency = 'usd') => api.get('/market/overview', { params: { vs_currency: vsCurrency } }),
 };
 
 export default api;

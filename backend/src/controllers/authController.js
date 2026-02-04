@@ -83,7 +83,7 @@ export const getCurrentUser = async (req, res) => {
     }
     res.json({
       message: "User found",
-      data: user.toJSON(),
+      user: user.toJSON(),
     });
   } catch (error) {
     console.error("Get user error:", error);

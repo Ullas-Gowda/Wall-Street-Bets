@@ -1,14 +1,15 @@
 import User from "../models/User.js";
 import Portfolio from "../models/Portfolio.js";
 import Transaction from "../models/Transaction.js";
+import { getPrice, getPrices } from "../services/marketService.js";
 
 // BUY ASSET
 export const buyAsset = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { symbol, quantity, pricePerUnit, type } = req.body;
+    const { symbol, quantity, type } = req.body; // Removed pricePerUnit from body
 
-    if (!symbol || !quantity || !pricePerUnit || !type) {
+    if (!symbol || !quantity || !type) {
       return res.status(400).json({ message: "All fields required" });
     }
 
@@ -17,6 +18,14 @@ export const buyAsset = async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
+
+    // Fetch LIVE price from backend (USD)
+    // This ensures we always trade at the real market price, not what frontend sends
+    const asset = await getPrice(symbol);
+    if (!asset) {
+      return res.status(400).json({ message: "Asset price unavailable" });
+    }
+    const pricePerUnit = asset.current_price;
 
     const totalCost = quantity * pricePerUnit;
 
@@ -80,6 +89,7 @@ export const buyAsset = async (req, res) => {
       transaction,
       portfolio,
       remainingBalance: user.balance,
+      price: pricePerUnit // Return the actual executed price
     });
   } catch (error) {
     console.error("Buy error:", error);
@@ -91,9 +101,9 @@ export const buyAsset = async (req, res) => {
 export const sellAsset = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { symbol, quantity, pricePerUnit, type } = req.body;
+    const { symbol, quantity, type } = req.body;
 
-    if (!symbol || !quantity || !pricePerUnit || !type) {
+    if (!symbol || !quantity || !type) {
       return res.status(400).json({ message: "All fields required" });
     }
 
@@ -102,6 +112,13 @@ export const sellAsset = async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
+
+    // Fetch LIVE price from backend (USD)
+    const asset = await getPrice(symbol);
+    if (!asset) {
+      return res.status(400).json({ message: "Asset price unavailable" });
+    }
+    const pricePerUnit = asset.current_price;
 
     // Get portfolio holding
     const portfolio = await Portfolio.findOne({
@@ -152,6 +169,7 @@ export const sellAsset = async (req, res) => {
       transaction,
       profitLoss,
       remainingBalance: user.balance,
+      price: pricePerUnit
     });
   } catch (error) {
     console.error("Sell error:", error);
@@ -171,7 +189,39 @@ export const getPortfolio = async (req, res) => {
     }
 
     // Get all holdings for user
-    const holdings = await Portfolio.find({ userId });
+    let holdings = await Portfolio.find({ userId });
+
+    // FETCH LIVE PRICES & RECALCULATE P&L
+    // This ensures "Profit/Loss on reload" is always fresh
+    const symbols = holdings.map(h => h.symbol);
+    const livePrices = await getPrices(symbols);
+
+    const priceMap = {};
+    livePrices.forEach(p => {
+      if (p && p.symbol) priceMap[p.symbol.toUpperCase()] = p.current_price;
+    });
+
+    // Update holdings in memory (and optionally DB, but memory is enough for read)
+    holdings = holdings.map(h => {
+      const sym = h.symbol.toUpperCase();
+
+      // Note: h is a Mongoose document. usage of toObject() or modifying directly?
+      // We'll calculate derived values.
+
+      const livePrice = priceMap[sym] || h.currentPrice; // Fallback to last known
+
+      const currentVal = h.quantity * livePrice;
+      const pnl = currentVal - h.totalInvested;
+
+      // We return a plain object with updated values
+      return {
+        ...h.toObject(),
+        currentPrice: livePrice,
+        currentValue: currentVal,
+        unrealizedPnL: pnl,
+        returnPercentage: h.totalInvested > 0 ? ((pnl / h.totalInvested) * 100).toFixed(2) : 0
+      };
+    });
 
     const totalInvested = holdings.reduce((sum, h) => sum + h.totalInvested, 0);
     const totalCurrentValue = holdings.reduce((sum, h) => sum + h.currentValue, 0);

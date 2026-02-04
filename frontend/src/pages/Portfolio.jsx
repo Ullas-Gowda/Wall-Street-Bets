@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { tradingAPI } from '../api';
-import { TrendingUp, TrendingDown, Eye } from 'lucide-react';
+import { useAuth } from '../AuthContext';
+import { TrendingUp, TrendingDown } from 'lucide-react';
 
 const Portfolio = () => {
+  const { user } = useAuth();
   const [portfolio, setPortfolio] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,7 +23,7 @@ const Portfolio = () => {
         tradingAPI.getTransactions(),
       ]);
       setPortfolio(portfolioRes.data);
-      setTransactions(transactionsRes.data);
+      setTransactions(transactionsRes.data.transactions || []);
     } catch (err) {
       setError('Failed to load portfolio data');
       console.error(err);
@@ -42,7 +44,8 @@ const Portfolio = () => {
   }
 
   const holdings = portfolio?.holdings || [];
-  const totalPL = (portfolio?.portfolioValue || 0) - (portfolio?.initialBalance || 0);
+  const summary = portfolio?.summary || {};
+  const userBalance = user?.balance || portfolio?.user?.balance || 0;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -58,19 +61,26 @@ const Portfolio = () => {
       )}
 
       {/* Portfolio Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="card">
-          <p className="text-gray-400 text-sm mb-2">Portfolio Value</p>
-          <p className="text-3xl font-bold text-white">${portfolio?.portfolioValue?.toLocaleString('en-US', { maximumFractionDigits: 2 })}</p>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="card">
           <p className="text-gray-400 text-sm mb-2">Cash Balance</p>
-          <p className="text-3xl font-bold text-white">${portfolio?.cashBalance?.toLocaleString('en-US', { maximumFractionDigits: 2 })}</p>
+          <p className="text-3xl font-bold text-white">${userBalance?.toLocaleString('en-US', { maximumFractionDigits: 2 })}</p>
+        </div>
+        <div className="card">
+          <p className="text-gray-400 text-sm mb-2">Total Invested</p>
+          <p className="text-3xl font-bold text-white">${(summary.totalInvested || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</p>
+        </div>
+        <div className="card">
+          <p className="text-gray-400 text-sm mb-2">Current Value</p>
+          <p className="text-3xl font-bold text-white">${(summary.totalCurrentValue || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</p>
         </div>
         <div className="card">
           <p className="text-gray-400 text-sm mb-2">Total Return</p>
-          <p className={`text-3xl font-bold ${totalPL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {totalPL >= 0 ? '+' : ''}${totalPL.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+          <p className={`text-3xl font-bold ${(summary.totalUnrealizedPnL || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {(summary.totalUnrealizedPnL || 0) >= 0 ? '+' : ''}${(summary.totalUnrealizedPnL || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+            {summary.totalReturnPercentage && (
+              <span className="text-sm ml-2">({summary.totalReturnPercentage}%)</span>
+            )}
           </p>
         </div>
       </div>
@@ -82,11 +92,10 @@ const Portfolio = () => {
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`py-4 px-6 font-medium transition-colors ${
-                activeTab === tab
+              className={`py-4 px-6 font-medium transition-colors ${activeTab === tab
                   ? 'border-b-2 border-blue-500 text-blue-400'
                   : 'text-gray-400 hover:text-white'
-              }`}
+                }`}
             >
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
@@ -112,18 +121,18 @@ const Portfolio = () => {
                   </thead>
                   <tbody>
                     {holdings.map((holding) => {
-                      const totalCost = holding.quantity * holding.avgPrice;
-                      const currentValue = holding.quantity * holding.currentPrice;
-                      const gainLoss = currentValue - totalCost;
-                      const returnPct = ((gainLoss / totalCost) * 100).toFixed(2);
+                      const gainLoss = holding.unrealizedPnL || 0;
+                      const returnPct = holding.totalInvested > 0
+                        ? ((gainLoss / holding.totalInvested) * 100).toFixed(2)
+                        : 0;
 
                       return (
                         <tr key={holding.symbol} className="border-b border-slate-700/50 hover:bg-slate-800/50 transition-colors">
                           <td className="py-3 px-4 font-bold text-white">{holding.symbol}</td>
-                          <td className="py-3 px-4 text-right text-gray-300">{holding.quantity}</td>
-                          <td className="py-3 px-4 text-right text-gray-300">${holding.avgPrice?.toFixed(2)}</td>
+                          <td className="py-3 px-4 text-right text-gray-300">{holding.quantity?.toFixed(8)}</td>
+                          <td className="py-3 px-4 text-right text-gray-300">${holding.averagePrice?.toFixed(2)}</td>
                           <td className="py-3 px-4 text-right text-gray-300">${holding.currentPrice?.toFixed(2)}</td>
-                          <td className="py-3 px-4 text-right font-medium text-white">${currentValue?.toFixed(2)}</td>
+                          <td className="py-3 px-4 text-right font-medium text-white">${holding.currentValue?.toFixed(2)}</td>
                           <td className={`py-3 px-4 text-right font-medium ${gainLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                             {gainLoss >= 0 ? '+' : ''}${gainLoss?.toFixed(2)}
                           </td>
@@ -159,16 +168,16 @@ const Portfolio = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {transactions.map((txn, idx) => (
-                      <tr key={idx} className="border-b border-slate-700/50 hover:bg-slate-800/50 transition-colors">
+                    {transactions.map((txn) => (
+                      <tr key={txn._id || txn.id} className="border-b border-slate-700/50 hover:bg-slate-800/50 transition-colors">
                         <td className="py-3 px-4 text-gray-400 text-xs">{new Date(txn.createdAt).toLocaleString()}</td>
                         <td className="py-3 px-4 font-bold text-white">{txn.symbol}</td>
                         <td className={`py-3 px-4 text-center font-medium ${txn.type === 'BUY' ? 'text-green-400' : 'text-red-400'}`}>
                           {txn.type}
                         </td>
-                        <td className="py-3 px-4 text-right text-gray-300">{txn.quantity}</td>
+                        <td className="py-3 px-4 text-right text-gray-300">{txn.quantity?.toFixed(8)}</td>
                         <td className="py-3 px-4 text-right text-gray-300">${txn.price?.toFixed(2)}</td>
-                        <td className="py-3 px-4 text-right font-medium text-white">${(txn.quantity * txn.price)?.toFixed(2)}</td>
+                        <td className="py-3 px-4 text-right font-medium text-white">${txn.totalValue?.toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
